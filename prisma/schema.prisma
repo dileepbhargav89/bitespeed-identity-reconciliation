@@ -1,0 +1,43 @@
+// This is your Prisma schema file.
+// It defines the data model for the Identity Reconciliation service.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enum for tracking whether a contact is the root of a linked group
+// or a subsequent entry associated with the same person.
+enum LinkPrecedence {
+  primary
+  secondary
+}
+
+/// The Contact model stores all collected customer contact information.
+/// Multiple Contact rows can represent the same real-world person.
+/// They are linked together via the linkedId field, with the oldest
+/// row in the group designated as the "primary" contact.
+model Contact {
+  id             Int             @id @default(autoincrement())
+  phoneNumber    String?
+  email          String?
+  linkedId       Int?            // FK to another Contact (the primary of this group)
+  linkPrecedence LinkPrecedence  @default(primary)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?       // Soft delete support
+
+  // Self-referential relation: a "primary" contact has many "secondary" contacts
+  linkedContact  Contact?        @relation("ContactLinks", fields: [linkedId], references: [id])
+  secondaries    Contact[]       @relation("ContactLinks")
+
+  // Index on email and phoneNumber for fast lookups during identity reconciliation
+  @@index([email])
+  @@index([phoneNumber])
+  @@index([linkedId])
+}
